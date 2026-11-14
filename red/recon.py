@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from pvp_core import command, literal_ip, private_run_dir, scope_targets, utc, write_json
+from red.scope_gate import require_authorized_target
 
 PROFILES = {
     'inventory': ('22,53,80,88,135,139,389,443,445,636,1433,3306,3389,5432,5985,5986,8080,8443', None),
@@ -38,9 +39,7 @@ def main():
     parser.add_argument('--grace-ended', action='store_true')
     parser.add_argument('--provided-kali', action='store_true')
     args = parser.parse_args()
-    target = literal_ip(args.target)
-    if target not in scope_targets(args.scope, 'offense'):
-        raise ValueError('Target is not on the confirmed opponent allowlist.')
+    target = require_authorized_target(args)
     preview = build_argv(target, args.profile, Path('<private-run-directory>') / 'nmap')
     if not args.run:
         print(json.dumps({'mode': 'plan', 'command': preview}, indent=2))
