@@ -1,0 +1,43 @@
+{
+  "management": {
+    "sources": [
+      "XX"
+    ],
+    "tcp_ports": [
+      22
+    ]
+  },
+  "services": [
+    {
+      "name": "http",
+      "protocol": "tcp",
+      "ports": [
+        80,
+        443
+      ],
+      "sources": [
+        "XX"
+      ]
+    },
+    {
+      "name": "dns-udp",
+      "protocol": "udp",
+      "ports": [
+        53
+      ],
+      "sources": [
+        "XX"
+      ]
+    },
+    {
+      "name": "dns-tcp",
+      "protocol": "tcp",
+      "ports": [
+        53
+      ],
+      "sources": [
+        "XX"
+      ]
+    }
+  ]
+}

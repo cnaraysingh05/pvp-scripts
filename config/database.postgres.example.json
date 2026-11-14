@@ -1,0 +1,10 @@
+[
+  {
+    "name": "database-postgres",
+    "type": "postgres",
+    "host": "172.16.XX.53",
+    "port": "XX",
+    "user": "XX",
+    "database": "XX"
+  }
+]

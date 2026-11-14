@@ -1,0 +1,23 @@
+{
+  "management": {
+    "sources": [
+      "XX"
+    ],
+    "tcp_ports": [
+      3389,
+      5985
+    ]
+  },
+  "services": [
+    {
+      "name": "smb",
+      "protocol": "tcp",
+      "ports": [
+        445
+      ],
+      "sources": [
+        "XX"
+      ]
+    }
+  ]
+}

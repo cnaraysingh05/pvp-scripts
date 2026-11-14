@@ -1,0 +1,58 @@
+{
+  "thehouse": {
+    "kind": "domain-human-users",
+    "authorized": [
+      "crazydave",
+      "penny",
+      "greenshadow",
+      "solarflare",
+      "nightcap",
+      "wallknight",
+      "captaincombustible",
+      "citron"
+    ],
+    "administrators": [
+      "crazydave"
+    ],
+    "unresolved": [
+      "Administrator appears in domain table but not host list. Do not automate removal."
+    ]
+  },
+  "sunflower": {
+    "kind": "human-users",
+    "authorized": [
+      "Administrator",
+      "jalapeno",
+      "coffeebean",
+      "pepperpult"
+    ]
+  },
+  "cherrybomb": {
+    "kind": "human-users",
+    "authorized": [
+      "user",
+      "lilypad",
+      "fumeshroom",
+      "dandelion",
+      "banana",
+      "root"
+    ]
+  },
+  "chomper": {
+    "kind": "human-users",
+    "authorized": [
+      "user",
+      "spikeweed",
+      "root"
+    ]
+  },
+  "peashooter": {
+    "kind": "human-users",
+    "authorized": [
+      "user",
+      "tanglekelp",
+      "hypnoshroom",
+      "root"
+    ]
+  }
+}

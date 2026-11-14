@@ -1,0 +1,22 @@
+{
+  "management": {
+    "sources": [
+      "XX"
+    ],
+    "tcp_ports": [
+      22
+    ]
+  },
+  "services": [
+    {
+      "name": "scored-ssh",
+      "protocol": "tcp",
+      "ports": [
+        22
+      ],
+      "sources": [
+        "XX"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "management": {
+    "sources": [
+      "XX"
+    ],
+    "tcp_ports": [
+      22
+    ]
+  },
+  "services": [
+    {
+      "name": "database",
+      "protocol": "tcp",
+      "ports": [
+        "XX"
+      ],
+      "sources": [
+        "XX"
+      ]
+    }
+  ]
+}

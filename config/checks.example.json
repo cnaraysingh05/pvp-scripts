@@ -1,0 +1,60 @@
+[
+  {
+    "name": "http",
+    "type": "http",
+    "host": "172.16.XX.52",
+    "port": 80,
+    "path": "/",
+    "status": 200,
+    "contains": "XX",
+    "tls": false,
+    "host_header": "cherrybomb.misty.view"
+  },
+  {
+    "name": "pihole-dns-udp",
+    "type": "dns",
+    "host": "172.16.XX.52",
+    "port": 53,
+    "query": "XX",
+    "expected": "XX",
+    "transport": "udp"
+  },
+  {
+    "name": "pihole-dns-tcp",
+    "type": "dns",
+    "host": "172.16.XX.52",
+    "port": 53,
+    "query": "XX",
+    "expected": "XX",
+    "transport": "tcp"
+  },
+  {
+    "name": "ssh",
+    "type": "ssh",
+    "host": "172.16.XX.54",
+    "port": 22,
+    "user": "XX",
+    "identity_file": "XX",
+    "known_hosts": "XX"
+  },
+  {
+    "name": "ldap",
+    "type": "ldap",
+    "host": "172.16.XX.50",
+    "port": 389,
+    "bind_dn": "XX",
+    "base_dn": "DC=misty,DC=view",
+    "tls": "starttls",
+    "contains": "DC=misty,DC=view"
+  },
+  {
+    "name": "smb",
+    "type": "smb",
+    "host": "172.16.XX.51",
+    "port": 445,
+    "user": "XX",
+    "domain": "XX",
+    "share": "XX",
+    "contains": "XX"
+  }
+]
