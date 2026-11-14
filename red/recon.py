@@ -2,12 +2,11 @@
 """Scoped, bounded Nmap discovery from the provided competition Kali. Preview by default."""
 import argparse
 import json
-import platform
 import shutil
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from pvp_core import command, literal_ip, private_run_dir, scope_targets, utc, write_json
+from pvp_core import command, private_run_dir, utc, write_json
 from red.scope_gate import require_authorized_target
 
 PROFILES = {
@@ -44,12 +43,6 @@ def main():
     if not args.run:
         print(json.dumps({'mode': 'plan', 'command': preview}, indent=2))
         return 0
-    if not args.grace_ended or not args.provided_kali:
-        raise ValueError('Live scans require --grace-ended and --provided-kali acknowledgments.')
-    release = Path('/etc/os-release')
-    if platform.system() != 'Linux' or not release.exists() or not any(
-            line.strip() in ('ID=kali', 'ID="kali"') for line in release.read_text().splitlines()):
-        raise ValueError('Run offensive discovery on the provided Kali Linux machine.')
     if not shutil.which('nmap'):
         raise ValueError('nmap is not installed; no scan started.')
     output = private_run_dir(args.output, target + '-' + args.profile)

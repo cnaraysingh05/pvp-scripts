@@ -8,6 +8,10 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+# The briefing's host grid is 172.16.XX.50-54. A /12 also covers the conflicting
+# 172.25.XX.52 Ubuntu address, so that discrepancy is reported, not silently allowed.
+COMPETITION_NETWORK = ipaddress.ip_network('172.16.0.0/12')
+
 
 def utc():
     return datetime.now(timezone.utc).isoformat()
@@ -37,24 +41,49 @@ def safe_text(value, label='value'):
     return value
 
 
-def scope_targets(path, purpose):
+def competition_host(value):
+    """Validate one literal competition host: IPv4 in 172.16.0.0/12 ending .50-.54."""
+    address = literal_ip(value)
+    ip = ipaddress.ip_address(address)
+    if ip.version != 4:
+        raise ValueError('PvP targets must be explicit IPv4 hosts.')
+    if ip not in COMPETITION_NETWORK:
+        raise ValueError('PvP targets must be inside 172.16.0.0/12; ' + address + ' is not a competition address.')
+    last = int(address.split('.')[-1])
+    if last == 1:
+        raise ValueError('PvP targets cannot be a pod router (.1); it is out of scope defensively and offensively.')
+    if last == 2:
+        raise ValueError('PvP targets cannot be a Kali machine (.2); it is out of scope and holds no flags.')
+    if last not in range(50, 55):
+        raise ValueError('PvP targets must be explicit IPv4 hosts ending .50 through .54.')
+    if ip.is_loopback or ip.is_multicast or ip.is_unspecified:
+        raise ValueError('Invalid competition target.')
+    return address
+
+
+def _scope_lists(path):
     data = load_json(path)
     if not isinstance(data, dict) or not isinstance(data.get('own_targets'), list) or not isinstance(data.get('opponent_targets'), list):
         raise ValueError('Scope requires own_targets and opponent_targets arrays.')
     if data.get('confirmed') is not True:
         raise ValueError('Scope is not confirmed. Resolve addresses with Green Team first.')
-    if purpose not in ('defense', 'offense'):
-        raise ValueError('Unknown scope purpose.')
-    own = {literal_ip(x) for x in data.get('own_targets', [])}
-    opponents = {literal_ip(x) for x in data.get('opponent_targets', [])}
+    own = {competition_host(x) for x in data.get('own_targets', [])}
+    opponents = {competition_host(x) for x in data.get('opponent_targets', [])}
     if own & opponents:
         raise ValueError('Own and opponent target lists overlap.')
-    for address in own | opponents:
-        ip = ipaddress.ip_address(address)
-        if ip.version != 4 or int(address.split('.')[-1]) not in range(50, 55):
-            raise ValueError('PvP targets must be explicit IPv4 hosts ending .50 through .54.')
-        if ip.is_loopback or ip.is_multicast or ip.is_unspecified:
-            raise ValueError('Invalid competition target.')
+    return own, opponents
+
+
+def scope_hosts(path):
+    """Every confirmed host, own and opponent, for local bookkeeping utilities."""
+    own, opponents = _scope_lists(path)
+    return own, opponents
+
+
+def scope_targets(path, purpose):
+    if purpose not in ('defense', 'offense'):
+        raise ValueError('Unknown scope purpose.')
+    own, opponents = _scope_lists(path)
     result = own if purpose == 'defense' else opponents
     if not result:
         raise ValueError('Selected target list is empty.')

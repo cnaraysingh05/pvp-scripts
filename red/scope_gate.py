@@ -1,69 +1,78 @@
 """
 scope_gate.py
 
-Shared safety gate for every offensive wrapper in red/. Mirrors the pattern
-already used by red/recon.py: preview by default, explicit --run to touch
-the network, and --grace-ended --provided-kali required before anything
-leaves the box. Every new offensive tool wrapper should import and call
-require_authorized_target() before building a real command.
+Shared safety gate for every offensive wrapper in red/. Preview by default,
+explicit --run to touch the network, and --grace-ended --provided-kali
+required before anything leaves the box.
 
-This module does not run anything by itself — it only decides whether a
-wrapper is allowed to proceed.
+All host validation lives in pvp_core.competition_host/scope_targets so this
+gate and the rest of the toolkit cannot drift apart. This module does not run
+anything by itself - it only decides whether a wrapper is allowed to proceed.
 """
 
 import argparse
 import json
+import platform
 import sys
+from pathlib import Path
 
-
-def load_scope(path: str) -> dict:
-    with open(path, "r") as f:
-        return json.load(f)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from pvp_core import scope_targets  # noqa: E402
 
 
 def add_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--scope", required=True, help="Path to scope.json (e.g. config/local/scope.json)")
-    parser.add_argument("--target", required=True, help="Single target IP — must exactly match an entry in opponent_targets")
+    parser.add_argument("--target", required=True, help="Single target IP - must exactly match an entry in opponent_targets")
+    parser.add_argument("--output", default="reports/red", help="Private per-run evidence directory (default reports/red)")
+    parser.add_argument("--timeout", type=int, default=300, help="Per-command timeout in seconds (default 300)")
     parser.add_argument("--run", action="store_true", help="Actually execute. Without this, only the command that WOULD run is printed.")
     parser.add_argument("--grace-ended", action="store_true", help="Acknowledge the 30-minute grace period has ended per the official clock/Green Team")
     parser.add_argument("--provided-kali", action="store_true", help="Acknowledge this is being run from the competition-provided Kali machine")
 
 
+def require_provided_kali() -> None:
+    """Verify the local host actually reports as Kali, not just that a flag was passed."""
+    release = Path("/etc/os-release")
+    if platform.system() != "Linux" or not release.is_file():
+        raise ValueError("Offensive tooling must run on the competition-provided Kali machine.")
+    fields = {}
+    for line in release.read_text(encoding="utf-8", errors="replace").splitlines():
+        if "=" in line:
+            key, value = line.split("=", 1)
+            fields[key.strip()] = value.strip().strip('"')
+    if fields.get("ID") != "kali":
+        raise ValueError("This host is not Kali (" + fields.get("ID", "unknown") + "); run offensive tooling from the provided Kali machine.")
+
+
 def require_authorized_target(args: argparse.Namespace) -> str:
     """
-    Returns the validated target IP, or exits with a clear error.
-    Does not execute anything — just gates.
+    Returns the validated target IP, or raises ValueError with a clear reason.
+    Does not execute anything - just gates.
     """
     try:
-        scope = load_scope(args.scope)
+        opponents = scope_targets(args.scope, "offense")
     except FileNotFoundError:
-        sys.exit(f"[BLOCKED] Scope file not found: {args.scope}")
-    except json.JSONDecodeError as e:
-        sys.exit(f"[BLOCKED] Scope file is not valid JSON: {e}")
+        raise ValueError("Scope file not found: " + str(args.scope))
+    except json.JSONDecodeError as exc:
+        raise ValueError("Scope file is not valid JSON: " + str(exc))
 
-    if scope.get("confirmed") is not True:
-        sys.exit("[BLOCKED] scope.json has confirmed != true. Verify scope with Green Team and set it explicitly before running anything offensive.")
-
-    opponent_targets = scope.get("opponent_targets", []) or []
-    if args.target not in opponent_targets:
-        sys.exit(
-            f"[BLOCKED] {args.target!r} is not in opponent_targets in {args.scope}. "
-            f"Add it explicitly after confirming it's in scope — never infer a target from a team number."
+    if args.target not in opponents:
+        raise ValueError(
+            str(args.target) + " is not in opponent_targets in " + str(args.scope) + ". "
+            "Add it explicitly after confirming it is in scope - never infer a target from a team number."
         )
 
-    if not args.run:
-        print("[PREVIEW MODE] Nothing will be executed. Add --run once you're ready to actually fire this.")
+    if args.run and getattr(args, "timeout", None) is not None and args.timeout < 1:
+        raise ValueError("--timeout must be a positive number of seconds.")
 
     if args.run and not (args.grace_ended and args.provided_kali):
-        sys.exit(
-            "[BLOCKED] --run requires both --grace-ended and --provided-kali. "
-            "These are an honor-system acknowledgment, not a clock check — don't set them until "
-            "Green Team / the official timer confirms the grace period has actually ended, and you "
-            "are actually running this from the provided Kali box."
+        raise ValueError(
+            "--run requires both --grace-ended and --provided-kali. These are an honor-system acknowledgment, "
+            "not a clock check - do not set them until Green Team / the official timer confirms the grace "
+            "period has ended, and you are actually running from the provided Kali box."
         )
 
-    # Hard refusal of obviously out-of-scope hosts even if someone edited scope.json carelessly
-    if args.target.endswith(".1") or ".1" in args.target.split(".")[-2:-1]:
-        pass  # left intentionally permissive here; real router/Kali exclusion lives in scope.json curation
+    if args.run:
+        require_provided_kali()
 
     return args.target

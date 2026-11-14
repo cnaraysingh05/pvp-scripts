@@ -23,6 +23,7 @@ Usage:
 """
 
 import argparse
+import os
 import secrets
 import string
 import sys
@@ -42,6 +43,16 @@ def generate_password(length: int = 16) -> str:
                 and any(c.isdigit() for c in pwd)
                 and any(c in "!@#$%^&*-_=+" for c in pwd)):
             return pwd
+
+
+def save_private(path, text):
+    """Create a new owner-only file; never overwrite an earlier credential list."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, 'w', encoding='utf-8') as handle:
+        handle.write(text + '\n')
+    return path
 
 
 def main() -> int:
@@ -71,16 +82,15 @@ def main() -> int:
     print(output)
 
     if args.save:
-        save_path = Path(args.save)
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        save_path.write_text(output + "\n")
-        print(f"\n[SAVED] Also written to {save_path} — confirm this path is covered by .gitignore before you forget.")
+        save_path = save_private(args.save, output)
+        print(f"\n[SAVED] Also written to {save_path} (mode 0600) - confirm this path is covered by .gitignore before you forget.")
 
     print(
         "\n[REMINDER] This only generates passwords. You still need to:\n"
         "  1. Actually set these passwords on the real accounts on the machine.\n"
         "  2. Submit the PCR in the scoring engine for any SCORED service account.\n"
-        "  Submitting a PCR for a non-scored user does nothing."
+        "  Submitting a PCR for a non-scored user does nothing.\n"
+        "  Record each host/user/PCR state with tools/credential_ledger.py so nothing is missed."
     )
     return 0
 

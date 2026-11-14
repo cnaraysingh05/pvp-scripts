@@ -7,11 +7,12 @@ Environment: macOS, Python 3. No elevated host changes and no competition networ
 | Check | Result |
 | --- | --- |
 | Python compilation | Passed |
-| Portable unit suite | 45 passed |
+| Portable unit suite | 58 passed |
 | Firewall/credential transaction behavior | Mocked subprocess tests; no kernel/account changes |
-| Scope and grace gates | Tested: placeholders, infrastructure hosts, overlap, unlisted targets and missing acknowledgments rejected |
+| Scope and grace gates | Tested: placeholders, out-of-subnet and infrastructure hosts, overlap, unconfirmed scope, unlisted targets and missing acknowledgments rejected |
 | Functional check interpretation | Mocked tests for HTTP body/status, DNS exact answers, native failures and missing tools |
-| Secret handling | Tested SMB password absence from argv and credential-file mode |
+| Secret handling | Tested SMB password absence from argv, credential-file mode, generated-password file mode 0600 and no-overwrite behavior |
+| Flag ledger | Tested raw/SHA-256 flag values and digest stability |
 | Baseline comparison | Tested ordering/timestamp handling and collection-error visibility |
 | Configuration-file filtering | Tested symlink, flag and traversal rejection |
 

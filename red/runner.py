@@ -14,7 +14,7 @@ from pvp_core import private_run_dir, utc, write_json
 
 
 def redact(text, secrets=()):
-    for value in sorted((str(x) for x in secrets if x), key=len, reverse=True):
+    for value in sorted((str(x) for x in secrets if x and str(x) != '<hidden-password>'), key=len, reverse=True):
         text = text.replace(value, '[REDACTED]')
     return text
 
@@ -61,7 +61,7 @@ def bounded_run(argv, timeout, secrets=()):
             'reason': reason, 'stdout': redact(stdout, secrets), 'stderr': redact(stderr, secrets)}
 
 
-def execute(args, target, label, build, secrets=(), verify=None):
+def execute(args, target, label, build, secrets=(), verify=None, stop_on_failure=True):
     """Stop on failed dependencies. Return process success separately from findings."""
     preview = build(Path('<run-directory>'))
     for cmd in preview:
@@ -85,7 +85,8 @@ def execute(args, target, label, build, secrets=(), verify=None):
                        'command': [redact(str(x), secrets) for x in cmd], 'result': result})
             records.append({'step': index, 'returncode': result['returncode'], 'reason': result['reason']})
             if result['returncode'] != 0:
-                outcome = result['returncode']; break
+                outcome = result['returncode']
+                if stop_on_failure: break
         if outcome == 0 and verify:
             verify(directory)
     except (OSError, ValueError) as exc:

@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -26,6 +27,9 @@ checks = module('service_checks', 'checks/check_services.py')
 recon = module('red_recon', 'red/recon.py')
 compare = module('baseline_diff', 'tools/baseline_diff.py')
 backup = module('config_backup', 'blue/linux/config_backup.py')
+gate = module('scope_gate', 'red/scope_gate.py')
+ledger = module('flag_ledger', 'tools/flag_ledger.py')
+passwords = module('password_gen', 'tools/password_gen.py')
 
 
 class ScopeTests(unittest.TestCase):
@@ -62,18 +66,18 @@ class ScopeTests(unittest.TestCase):
 
 class CheckTests(unittest.TestCase):
     def item(self):
-        return {'name': 'web', 'type': 'http', 'host': '192.0.2.52', 'port': 80,
+        return {'name': 'web', 'type': 'http', 'host': '172.16.2.52', 'port': 80,
                 'path': '/', 'status': 200, 'contains': 'EXPECTED', 'tls': False}
 
     def test_scope_and_schema(self):
-        with self.assertRaises(ValueError): checks.validate([self.item()], {'192.0.2.54'})
+        with self.assertRaises(ValueError): checks.validate([self.item()], {'172.16.2.54'})
         bad = self.item(); bad['port'] = True
-        with self.assertRaises(ValueError): checks.validate([bad], {'192.0.2.52'})
+        with self.assertRaises(ValueError): checks.validate([bad], {'172.16.2.52'})
         bad = self.item(); bad['host_header'] = 'safe\r\nInjected: x'
-        with self.assertRaises(ValueError): checks.validate([bad], {'192.0.2.52'})
+        with self.assertRaises(ValueError): checks.validate([bad], {'172.16.2.52'})
 
     def test_duplicate_names(self):
-        with self.assertRaises(ValueError): checks.validate([self.item(), self.item()], {'192.0.2.52'})
+        with self.assertRaises(ValueError): checks.validate([self.item(), self.item()], {'172.16.2.52'})
 
     def test_http_status_alone_is_insufficient(self):
         with patch.object(checks.http.client, 'HTTPConnection') as factory:
@@ -95,17 +99,17 @@ class CheckTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             config, scope = Path(d)/'checks.json', Path(d)/'scope.json'
             config.write_text(json.dumps([self.item()]))
-            scope.write_text(json.dumps({'confirmed': True, 'own_targets': ['192.0.2.52'], 'opponent_targets': []}))
+            scope.write_text(json.dumps({'confirmed': True, 'own_targets': ['172.16.2.52'], 'opponent_targets': []}))
             with patch.object(sys, 'argv', ['check_services', '--config', str(config), '--scope', str(scope)]), patch.object(checks, 'check') as run, contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(checks.main(), 0); run.assert_not_called()
 
     def test_dns_exact_answer(self):
-        item = {'type': 'dns', 'host': '192.0.2.52', 'port': 53, 'query': 'test.example', 'expected': '192.0.2.1', 'transport': 'udp'}
-        with patch.object(checks, 'command', return_value={'returncode': 0, 'stdout': '192.0.2.10\n', 'stderr': ''}):
+        item = {'type': 'dns', 'host': '172.16.2.52', 'port': 53, 'query': 'test.example', 'expected': '172.16.2.10', 'transport': 'udp'}
+        with patch.object(checks, 'command', return_value={'returncode': 0, 'stdout': '172.16.2.11\n', 'stderr': ''}):
             self.assertFalse(checks.native_check(item, 5, '.', '')[0])
 
     def test_password_not_in_argv_and_private_authfile(self):
-        item = {'type': 'smb', 'host': '192.0.2.51', 'port': 445, 'user': 'user', 'domain': 'DOMAIN', 'share': 'data', 'contains': 'test.txt'}
+        item = {'type': 'smb', 'host': '172.16.2.51', 'port': 445, 'user': 'user', 'domain': 'DOMAIN', 'share': 'data', 'contains': 'test.txt'}
         with tempfile.TemporaryDirectory() as d, patch.object(checks, 'command', return_value={'returncode': 0, 'stdout': 'test.txt', 'stderr': ''}) as run:
             self.assertTrue(checks.native_check(item, 5, d, 'SECRET-value')[0])
             argv = run.call_args.args[0]
@@ -113,13 +117,13 @@ class CheckTests(unittest.TestCase):
             self.assertEqual((Path(d)/'smb-auth').stat().st_mode & 0o777, 0o600)
 
     def test_database_failure_not_pass(self):
-        item = {'type': 'postgres', 'host': '192.0.2.53', 'port': 5432, 'user': 'user', 'database': 'db'}
+        item = {'type': 'postgres', 'host': '172.16.2.53', 'port': 5432, 'user': 'user', 'database': 'db'}
         with tempfile.TemporaryDirectory() as d, patch.object(checks, 'command', return_value={'returncode': 2, 'stdout': '1', 'stderr': 'fail'}):
             self.assertFalse(checks.native_check(item, 5, d, 'secret')[0])
 
     def test_plaintext_ldap_rejected(self):
-        item = {'name': 'ldap', 'type': 'ldap', 'host': '192.0.2.50', 'port': 389, 'bind_dn': 'user', 'base_dn': 'DC=example', 'contains': 'DC=example', 'tls': 'none'}
-        with self.assertRaises(ValueError): checks.validate([item], {'192.0.2.50'})
+        item = {'name': 'ldap', 'type': 'ldap', 'host': '172.16.2.50', 'port': 389, 'bind_dn': 'user', 'base_dn': 'DC=example', 'contains': 'DC=example', 'tls': 'none'}
+        with self.assertRaises(ValueError): checks.validate([item], {'172.16.2.50'})
 
     def test_missing_tool_is_failure(self):
         with patch.object(checks.shutil, 'which', return_value=None):
@@ -127,21 +131,107 @@ class CheckTests(unittest.TestCase):
 
 
 class ReconTests(unittest.TestCase):
+    def scope_file(self, directory, opponent='172.16.2.50', confirmed=True):
+        path = Path(directory) / 'scope.json'
+        path.write_text(json.dumps({'confirmed': confirmed, 'own_targets': ['172.16.1.50'],
+                                    'opponent_targets': [opponent]}))
+        return path
+
     def test_no_shell_or_broad_scripts(self):
-        args = recon.build_argv('192.0.2.50', 'windows', Path('/tmp/run/nmap'))
-        self.assertEqual(args[-1], '192.0.2.50')
+        args = recon.build_argv('172.16.2.50', 'windows', Path('/tmp/run/nmap'))
+        self.assertEqual(args[-1], '172.16.2.50')
         self.assertNotIn('-A', args)
         self.assertNotIn('--script=vuln', args)
         self.assertIn('--host-timeout', args)
 
     def test_grace_gate_precedes_execution(self):
-        with patch.object(sys, 'argv', ['recon', '--scope', 'unused', '--target', '192.0.2.50', '--run']), patch.object(recon, 'scope_targets', return_value={'192.0.2.50'}), patch.object(recon, 'command') as run:
-            with self.assertRaises(ValueError): recon.main()
-            run.assert_not_called()
+        with tempfile.TemporaryDirectory() as d:
+            scope = self.scope_file(d)
+            with patch.object(sys, 'argv', ['recon', '--scope', str(scope), '--target', '172.16.2.50', '--run']), \
+                    patch.object(recon, 'command') as run:
+                with self.assertRaises(ValueError): recon.main()
+                run.assert_not_called()
 
     def test_unlisted_target_rejected(self):
-        with patch.object(sys, 'argv', ['recon', '--scope', 'unused', '--target', '192.0.2.51']), patch.object(recon, 'scope_targets', return_value={'192.0.2.50'}):
-            with self.assertRaises(ValueError): recon.main()
+        with tempfile.TemporaryDirectory() as d:
+            scope = self.scope_file(d)
+            with patch.object(sys, 'argv', ['recon', '--scope', str(scope), '--target', '172.16.2.51']), \
+                    patch.object(recon, 'command') as run:
+                with self.assertRaises(ValueError): recon.main()
+                run.assert_not_called()
+
+
+class ScopeGateTests(unittest.TestCase):
+    def run_gate(self, scope, target, **flags):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / 'scope.json'
+            path.write_text(json.dumps(scope))
+            options = dict(scope=str(path), target=target, run=False, grace_ended=False,
+                           provided_kali=False, timeout=300)
+            options.update(flags)
+            return gate.require_authorized_target(SimpleNamespace(**options))
+
+    def scope(self, opponent='172.16.2.50'):
+        return {'confirmed': True, 'own_targets': ['172.16.1.50'], 'opponent_targets': [opponent]}
+
+    def test_listed_target_accepted(self):
+        self.assertEqual(self.run_gate(self.scope(), '172.16.2.50'), '172.16.2.50')
+
+    def test_unlisted_target_rejected(self):
+        with self.assertRaises(ValueError): self.run_gate(self.scope(), '172.16.2.51')
+
+    def test_infrastructure_rejected_even_if_listed(self):
+        for target in ['172.16.2.1', '172.16.2.2']:
+            with self.subTest(target=target), self.assertRaises(ValueError):
+                self.run_gate(self.scope(opponent=target), target)
+
+    def test_unconfirmed_scope_rejected(self):
+        scope = self.scope(); scope['confirmed'] = False
+        with self.assertRaises(ValueError): self.run_gate(scope, '172.16.2.50')
+
+    def test_overlap_rejected(self):
+        with self.assertRaises(ValueError):
+            self.run_gate({'confirmed': True, 'own_targets': ['172.16.2.50'],
+                           'opponent_targets': ['172.16.2.50']}, '172.16.2.50')
+
+    def test_placeholder_rejected(self):
+        with self.assertRaises(ValueError):
+            self.run_gate(self.scope(opponent='172.16.XX.50'), '172.16.XX.50')
+
+    def test_missing_acknowledgment_rejected(self):
+        with self.assertRaises(ValueError):
+            self.run_gate(self.scope(), '172.16.2.50', run=True, grace_ended=True)
+
+
+class FlagLedgerTests(unittest.TestCase):
+    def test_sha256_value_accepted(self):
+        value = 'a' * 64
+        self.assertEqual(ledger.flag_value(value), value)
+
+    def test_raw_flag_value_accepted(self):
+        self.assertEqual(ledger.flag_value('  flag{not-hex}  '), 'flag{not-hex}')
+
+    def test_empty_and_whitespace_and_oversize_rejected(self):
+        for value in ['', '   ', 'two words', 'x' * 513, 'tab\there']:
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                ledger.flag_value(value)
+
+    def test_digest_is_stable(self):
+        self.assertEqual(ledger.digest('abc'), 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')
+
+
+class PasswordGenTests(unittest.TestCase):
+    def test_saved_passwords_are_owner_only(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = passwords.save_private(Path(d) / 'nested' / 'passwords.txt', 'user,secret')
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(path.read_text(), 'user,secret\n')
+
+    def test_refuses_to_overwrite(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / 'passwords.txt'
+            passwords.save_private(path, 'first')
+            with self.assertRaises(FileExistsError): passwords.save_private(path, 'second')
 
 
 class DiffTests(unittest.TestCase):

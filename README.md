@@ -23,8 +23,8 @@ Configuration templates retain `XX` for unknown values. They are deliberately no
 | `blue/linux/` | Inventory, configuration/persistence review, local password rotation, nftables input policy with rollback, configuration snapshots and selected-file restoration |
 | `blue/windows/` | Inventory, AD and SMB review, effective firewall-rule inspection, local/domain password rotation, firewall rollback, selected-file backups |
 | `checks/` | HTTP content, DNS A records, SSH key authentication, LDAP bind/query, SMB listing and database `SELECT 1` checks; native Windows LDAP/SMB checks |
-| `red/` | Explicit-target Nmap service discovery and focused protocol enumeration |
-| `tools/` | JSON baseline comparison and private flag-submission ledger |
+| `red/` | Explicit-target Nmap service discovery and focused protocol enumeration. Every wrapper previews by default; `--run` adds bounded timeouts, private evidence directories and credential redaction. |
+| `tools/` | Scope preflight, JSON baseline comparison, local password generation, private flag ledger and private credential/PCR ledger |
 | `config/` | Scope, accounts and per-service templates |
 | `tests/` | Portable unit tests, isolated fixtures and PowerShell parser/preview checks |
 | `docs/` | Technical reference, compatibility boundaries, validation status and briefing constraints |
@@ -47,10 +47,14 @@ Representative interfaces (run from the repository root):
 python3 blue/linux/collect.py --output /var/lib/pvp-scripts/reports
 python3 blue/linux/firewall.py plan --config config/local/linux-web.json
 python3 checks/check_services.py --config config/local/checks.json --scope config/local/scope.json --only http
+python3 tools/preflight_check.py --scope config/local/scope.json
 python3 red/recon.py --scope config/local/scope.json --target 172.16.XX.50 --profile windows
 python3 tools/baseline_diff.py reports/before.json reports/after.json
+python3 tools/credential_ledger.py list
 python3 -m unittest discover -s tests -v
 ```
+
+`tools/preflight_check.py` validates the scope file before the competition and again after addresses are confirmed. It delegates to the same host validation the wrappers use and exits non-zero on failure, so it can gate a pre-run hook.
 
 The `XX` reconnaissance example will reject the unresolved address. Preview is the default for the network utilities; `--run` is required to contact hosts. Offensive execution additionally requires `--grace-ended --provided-kali` and Kali Linux. These flags record operator acknowledgment; they cannot independently verify the organizer's clock or the identity of the provided VM.
 
@@ -68,7 +72,7 @@ See [REFERENCE.md](docs/REFERENCE.md) for arguments, authentication behavior and
 
 - Preserve baseline evidence and relevant configurations before changes.
 - Change one explicitly selected account or policy at a time, then verify a fresh connection and the actual application transaction.
-- Coordinate scored-account password changes with the scoring engine's password change request process. The toolkit does not submit PCRs.
+- Coordinate scored-account password changes with the scoring engine's password change request process. The toolkit does not submit PCRs; `tools/credential_ledger.py` records which host/user has a PCR pending, submitted or verified so a scored account is not left without one.
 - Keep reports, passwords, captured flags and completed environment configurations out of version control. Ignored directories are a convenience, not a secret scanner.
 - Review collection errors. A missing tool, inaccessible section or successful TCP connection is not a clean security verdict.
 - Flags are read and submitted according to competition rules; no utility alters target flags or their locations. The local ledger does not contact FlagKeeper.

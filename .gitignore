@@ -16,3 +16,11 @@ config/local/
 .env
 .env.*
 !.env.example
+
+# Scanner output when --output is pointed outside reports/
+ffuf*.json
+nuclei*.json
+nuclei*.jsonl
+nmap*.xml
+nmap*.nmap
+*.gnmap

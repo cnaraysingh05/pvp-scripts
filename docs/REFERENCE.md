@@ -18,6 +18,10 @@ Windows local: `Credentials.ps1 -User USER` previews; `-Apply -AckServiceImpact`
 
 A coordinated scoring status is a declaration, not automated proof of PCR submission. Complete the scorer change and test new authentication. Existing sessions, keys, tickets and application credentials are not all invalidated by a password reset.
 
+`tools/password_gen.py` generates local password candidates. `--save PATH` creates a new owner-only file (mode 0600) and refuses to overwrite an earlier list. It does not set passwords on any host.
+
+`tools/credential_ledger.py` keeps the host/user/password/PCR state locally in mode-0700 `private/credentials/` SQLite. `add` prompts for the new password; `pcr-submitted`, `pcr-pending` and `verified` record scorer state; `pending` lists accounts still missing a PCR; `export --host IP` reveals one host's stored passwords only after an interactive host-name confirmation. It never contacts the scoring engine or changes an account.
+
 ## Firewall
 
 Linux interface: `firewall.py plan|apply|rollback`. Plan/apply require `--config PATH`; apply also requires root and `--console-confirmed`. The runtime input table is `pvp_scripts`; state is `/var/lib/pvp-scripts`. Backups precede atomic nftables changes. Rollback deletes only the managed table. Existing connections and ICMP are retained. This backend requires a systemd Linux host with nft and no active UFW/firewalld.
@@ -57,8 +61,16 @@ For Windows-integrated directory authentication, `checks/Check-Services.ps1 -Kin
 
 ## Offensive reconnaissance
 
-`red/recon.py --scope PATH --target IP --profile inventory|web|windows|ssh|database` previews a single-target Nmap command. Live mode requires `--run --grace-ended --provided-kali`. Ports and script names are fixed per profile. Requests have a rate cap and host/script/process timeouts; output goes to a unique private directory under `reports/recon/` unless overridden. Nmap raw/XML output and `run.json` preserve errors and timestamps. Discovery does not prove exploitability. This does not scan UDP or every TCP port.
+All `red/` wrappers share `red/scope_gate.py` and `red/runner.py`. They preview a command by default; `--run` requires `--grace-ended --provided-kali` and verifies `/etc/os-release` reports `ID=kali`. Each run gets a unique mode-0700 evidence directory, per-command timeouts, and redaction of supplied passwords in printed and recorded commands.
+
+Scope validation is centralized in `pvp_core.competition_host`: targets must be literal IPv4 addresses inside `172.16.0.0/12` ending `.50` through `.54`. Addresses ending `.1` (pod router) and `.2` (Kali) are rejected with a specific message even if someone lists them in scope. Overlap between own and opponent lists and unconfirmed scope are rejected. Targets are never inferred from a team number.
+
+`red/recon.py --scope PATH --target IP --profile inventory|web|windows|ssh|database` previews a single-target Nmap command. Ports and script names are fixed per profile. Requests have a rate cap and host/script/process timeouts; output goes to a unique private directory under `reports/recon/` unless overridden. Nmap raw/XML output and step records preserve errors and timestamps. Discovery does not prove exploitability. This does not scan UDP or every TCP port.
+
+`red/ffuf_scan.py`, `red/nuclei_scan.py`, `red/smb_enum.py`, `red/netexec_scan.py`, `red/kerbrute_scan.py`, `red/linpeas_deploy.py` and `red/sharphound_deploy.py` follow the same gate. Credential-taking wrappers offer a hidden prompt and redact the value; `--password` remains available but places the secret in shell history. Password spraying prints a lockout warning and stays single-password by design. `linpeas_deploy.py` and `sharphound_deploy.py` run cleanup even when an earlier step fails. `sharphound_deploy.py` performs collection only; it does not obtain credentials or exploit the DC.
+
+`tools/preflight_check.py --scope PATH` applies the same host rule to a scope file, reports out-of-grid or conflicting addresses as warnings, and exits non-zero on any error.
 
 ## Flag ledger
 
-`tools/flag_ledger.py add --scope PATH --host IP --path FLAG_PATH` reads a flag through a hidden prompt and records it in private local SQLite. `accepted` and `rejected` update the selected flag's state after manual FlagKeeper feedback; `list` shows only a flag prefix. Exact duplicates are rejected. No network submission occurs. Default storage: ignored `private/flags`, mode 0700. The expected flag value is 64 hexadecimal characters; submit the value supplied by the target, not a newly computed hash of its file.
+`tools/flag_ledger.py add --scope PATH --host IP --path FLAG_PATH` reads a flag through a hidden prompt and records it in private local SQLite. The stored value is exactly what was submitted: a bare SHA-256 value or a raw flag string of 1..512 printable ASCII characters without whitespace. A SHA-256 digest of that value is also stored as a separate column for cross-checking. `accepted` and `rejected` update the selected value's state after manual FlagKeeper feedback; `list` shows only a value prefix and digest prefix. Exact duplicates are rejected. No network submission occurs and no hash is invented. Default storage: ignored `private/flags`, mode 0700.

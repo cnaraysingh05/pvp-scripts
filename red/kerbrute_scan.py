@@ -2,42 +2,36 @@
 """
 red/kerbrute_scan.py
 
-Wraps kerbrute for Kerberos pre-auth username enumeration, and optionally
-password spraying, against an in-scope AD domain controller (thehouse).
-Gated the same way as the other red/ wrappers.
+Wraps kerbrute for username enumeration and password spraying against an
+in-scope AD domain controller (thehouse). Gated the same way as the other
+red/ wrappers.
 
 Username enumeration is low-risk (no bad password attempts logged for
-valid accounts under default Kerberos behavior). Password spraying is
-NOT low-risk — it can lock out accounts depending on the domain's lockout
-policy, which hurts your own scored uptime if it's a shared/scored
-account. Read the warning this script prints before using --spray.
+valid users, but it does confirm which names exist). Password spraying is
+NOT low-risk: repeated failures can lock out accounts, and a lockout on a
+scored service account costs your own team uptime points.
 
-Requires kerbrute (https://github.com/ropnop/kerbrute) on the Kali box,
-and a username wordlist (SecLists has common AD username lists).
-
-Usage — enumerate usernames (preview):
+Usage - username enumeration (preview):
     python3 red/kerbrute_scan.py --scope config/local/scope.json \\
         --target 172.16.XX.50 --domain misty.view --userlist users.txt
 
-Usage — enumerate usernames (actually run):
+Usage - username enumeration (actually run):
     python3 red/kerbrute_scan.py --scope config/local/scope.json \\
         --target 172.16.XX.50 --domain misty.view --userlist users.txt \\
         --run --grace-ended --provided-kali
 
-Usage — password spray (requires --spray AND --password explicitly):
+Usage - password spray (hidden prompt; requires --spray):
     python3 red/kerbrute_scan.py --scope config/local/scope.json \\
         --target 172.16.XX.50 --domain misty.view --userlist valid_users.txt \\
-        --spray --password 'Summer2026!' \\
-        --run --grace-ended --provided-kali
+        --spray --run --grace-ended --provided-kali
 """
 
 import argparse
-import shlex
-import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, "red")
+from runner import cli, execute, hidden_password  # noqa: E402
 from scope_gate import add_common_args, require_authorized_target  # noqa: E402
 
 
@@ -56,18 +50,24 @@ def main() -> int:
     parser.add_argument("--domain", required=True, help="AD domain name, e.g. misty.view")
     parser.add_argument("--userlist", required=True, help="Path to username wordlist")
     parser.add_argument("--spray", action="store_true", help="Password-spray instead of enumerate. Reads the risk warning below.")
-    parser.add_argument("--password", default="", help="Single password to spray (required with --spray)")
+    parser.add_argument("--password", default=None, help="Single password to spray (prefer the hidden prompt; this flag leaks into shell history)")
     parser.add_argument("--threads", type=int, default=10, help="kerbrute thread count (default 10, keep conservative for spraying)")
     args = parser.parse_args()
 
+    if args.threads < 1:
+        raise ValueError("--threads must be a positive integer.")
+
     target = require_authorized_target(args)
 
-    if not Path(args.userlist).is_file():
-        sys.exit(f"[BLOCKED] userlist not found: {args.userlist}")
+    if args.run and not Path(args.userlist).is_file():
+        raise ValueError("Userlist not found: " + args.userlist)
+
+    password = hidden_password(args, needed=args.spray)
+    secrets = (password,) if password else ()
 
     if args.spray:
-        if not args.password:
-            sys.exit("[BLOCKED] --spray requires --password to be set explicitly.")
+        if not password:
+            raise ValueError("--spray requires a password.")
         print(
             "[WARNING] Password spraying can trigger account lockouts depending on the domain's "
             "lockout policy. If any sprayed account is also a scored service account, a lockout "
@@ -78,21 +78,11 @@ def main() -> int:
     else:
         mode = "userenum"
 
-    cmd = build_command(mode, target, args.domain, args.userlist, args.password, args.threads)
-    print("Command:", " ".join(shlex.quote(c) for c in cmd))
+    def build(directory):
+        return [build_command(mode, target, args.domain, args.userlist, password, args.threads)]
 
-    if not args.run:
-        return 0
-
-    try:
-        subprocess.run(cmd, check=True)
-    except FileNotFoundError:
-        sys.exit("[ERROR] kerbrute not found on this machine. Install it on the provided Kali box first.")
-    except subprocess.CalledProcessError as e:
-        sys.exit(f"[ERROR] kerbrute exited with status {e.returncode}")
-
-    return 0
+    return execute(args, target, "kerbrute-" + mode, build, secrets=secrets)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(cli(main))

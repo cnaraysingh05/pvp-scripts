@@ -6,7 +6,7 @@ Directory/file fuzzing wrapper around ffuf, gated the same way as recon.py.
 Intended for cherrybomb's HTTP service, but works against any in-scope
 target running a web server.
 
-Requires ffuf and a wordlist (defaults to a common SecLists path — adjust
+Requires ffuf and a wordlist (defaults to a common SecLists path - adjust
 --wordlist if yours lives elsewhere).
 
 Usage (preview, safe, no network traffic):
@@ -18,18 +18,18 @@ Usage (actually run, once grace period is over and you're on provided Kali):
 """
 
 import argparse
-import shlex
-import subprocess
 import sys
+from pathlib import Path
 
 sys.path.insert(0, "red")
+from runner import cli, execute  # noqa: E402
 from scope_gate import add_common_args, require_authorized_target  # noqa: E402
 
 DEFAULT_WORDLIST = "/usr/share/seclists/Discovery/Web-Content/common.txt"
 DEFAULT_EXTENSIONS = "php,html,txt,bak,zip,js"
 
 
-def build_command(target: str, port: int, wordlist: str, extensions: str, threads: int) -> list:
+def build_command(directory: Path, target: str, port: int, wordlist: str, extensions: str, threads: int) -> list:
     url = f"http://{target}:{port}/FUZZ"
     return [
         "ffuf",
@@ -39,7 +39,7 @@ def build_command(target: str, port: int, wordlist: str, extensions: str, thread
         "-t", str(threads),
         "-mc", "200,204,301,302,307,401,403",
         "-of", "json",
-        "-o", f"ffuf_{target.replace('.', '_')}.json",
+        "-o", str(directory / "ffuf.json"),
     ]
 
 
@@ -52,23 +52,20 @@ def main() -> int:
     parser.add_argument("--threads", type=int, default=40, help="ffuf thread count (default 40)")
     args = parser.parse_args()
 
+    if not 1 <= args.port <= 65535:
+        raise ValueError("--port must be 1..65535.")
+    if args.threads < 1:
+        raise ValueError("--threads must be a positive integer.")
+
     target = require_authorized_target(args)
-    cmd = build_command(target, args.port, args.wordlist, args.extensions, args.threads)
+    if args.run and not Path(args.wordlist).is_file():
+        raise ValueError("Wordlist not found: " + args.wordlist)
 
-    print("Command:", " ".join(shlex.quote(c) for c in cmd))
+    def build(directory):
+        return [build_command(directory, target, args.port, args.wordlist, args.extensions, args.threads)]
 
-    if not args.run:
-        return 0
-
-    try:
-        subprocess.run(cmd, check=True)
-    except FileNotFoundError:
-        sys.exit("[ERROR] ffuf not found on this machine. Install it on the provided Kali box first.")
-    except subprocess.CalledProcessError as e:
-        sys.exit(f"[ERROR] ffuf exited with status {e.returncode}")
-
-    return 0
+    return execute(args, target, "ffuf", build)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(cli(main))
